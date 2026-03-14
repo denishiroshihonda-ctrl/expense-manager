@@ -2,20 +2,28 @@
 import { createBrowserClient } from '@supabase/ssr';
 
 export default function LoginPage() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   async function signInWithGoogle() {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          flowType: 'implicit',
+        },
+        cookieOptions: {
+          name: 'sb',
+          lifetime: 60 * 60 * 8,
+          domain: '',
+          path: '/',
+          sameSite: 'lax',
+        },
+      }
+    );
+
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${location.origin}/auth/callback`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
       },
     });
   }
@@ -23,7 +31,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--bg)' }}>
       <div className="w-full max-w-sm rounded-2xl p-8 border" style={{ background: 'var(--surf)', borderColor: 'var(--brd)' }}>
-        {/* Logo */}
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'linear-gradient(135deg,#1e3a5f,#1e4d6b)' }}>
