@@ -1,6 +1,5 @@
 'use client';
 import { useState, useRef, useCallback } from 'react';
-import { createClient } from '@/lib/supabase-browser';
 import { Project, Report, Expense, Category, CAT, COLORS, fmt } from '@/lib/types';
 import { resizeImage, renderPdfPage } from '@/lib/fileUtils';
 import Sidebar from './Sidebar';
@@ -10,14 +9,10 @@ import ProjectModal from './ProjectModal';
 import ReportModal from './ReportModal';
 import ExpenseModal from './ExpenseModal';
 
-interface Props {
-  user: { name: string; avatar?: string };
-}
-
 let _id = 1;
 const uid = () => String(_id++);
 
-export default function AppShell({ user }: Props) {
+export default function AppShell() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activePid, setActivePid] = useState<string | null>(null);
   const [activeRid, setActiveRid] = useState<string | null>(null);
@@ -33,18 +28,11 @@ export default function AppShell({ user }: Props) {
   const [queueItems, setQueueItems] = useState<{ id: string; name: string; size: number; status: 'analyzing' | 'done' | 'error'; error?: string; thumbUrl?: string }[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
 
   const ap = () => projects.find(p => p.id === activePid) ?? null;
   const ar = () => { const p = ap(); return p ? p.reports.find(r => r.id === activeRid) ?? null : null; };
 
   const updateProjects = (fn: (prev: Project[]) => Project[]) => setProjects(fn);
-
-  // Auth
-  async function signOut() {
-    await supabase.auth.signOut();
-    location.href = '/login';
-  }
 
   // Project ops
   function createProject(name: string, code: string, color: string) {
@@ -196,7 +184,6 @@ export default function AppShell({ user }: Props) {
         activePid={activePid}
         activeRid={activeRid}
         grandTotal={grandTotal}
-        user={user}
         onSelectReport={(pid, rid) => { setActivePid(pid); setActiveRid(rid); setFilter('all'); setQueueItems([]); }}
         onToggleProject={(pid) => { setActivePid(prev => prev === pid ? null : pid); if (activePid !== pid) setActiveRid(null); }}
         onNewProject={() => { setEditPid(null); setShowPM(true); }}
@@ -204,7 +191,6 @@ export default function AppShell({ user }: Props) {
         onDeleteProject={deleteProject}
         onNewReport={(pid) => { setPendRpid(pid); setShowRM(true); }}
         onDeleteReport={deleteReport}
-        onSignOut={signOut}
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
