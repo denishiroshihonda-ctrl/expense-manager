@@ -13,6 +13,7 @@
   --tx: #e2e8f0;
   --tx2: #94a3b8;
   --tx3: #64748b;
+  color-scheme: dark;
 }
 
 /* Tema claro */
@@ -26,6 +27,7 @@
   --tx: #1e293b;
   --tx2: #475569;
   --tx3: #64748b;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
