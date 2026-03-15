@@ -78,6 +78,19 @@ export default function AppShell() {
     setIsLoaded(true);
   }, []);
 
+  // Carregar PDF.js
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !(window as any).pdfjsLib) {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = () => {
+        (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = 
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      };
+      document.head.appendChild(script);
+    }
+  }, []);
+
   // Salvar dados quando projects mudar
   useEffect(() => {
     if (isLoaded) {
@@ -250,18 +263,6 @@ export default function AppShell() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
-      {/* PDF.js CDN */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            var s=document.createElement('script');
-            s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-            s.onload=function(){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';};
-            document.head.appendChild(s);
-          `,
-        }}
-      />
-
       <Sidebar
         projects={projects}
         activePid={activePid}
