@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useCallback } from 'react';
 import { Project, Report, Expense, Category, CAT, COLORS, fmt } from '@/lib/types';
-import { resizeImage, renderPdfPage } from '@/lib/fileUtils';
+import { resizeImage, renderPdfPage, formatFileSize } from '@/lib/fileUtils';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import ReportView from './ReportView';
@@ -25,7 +25,7 @@ export default function AppShell() {
   const [pendRpid, setPendRpid] = useState<string | null>(null);
   const [editEid, setEditEid] = useState<string | null>(null);
 
-  const [queueItems, setQueueItems] = useState<{ id: string; name: string; size: number; status: 'analyzing' | 'done' | 'error'; error?: string; thumbUrl?: string }[]>([]);
+  const [queueItems, setQueueItems] = useState<{ id: string; name: string; size: number; status: 'analyzing' | 'done' | 'error'; error?: string; warning?: string; thumbUrl?: string }[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,15 +103,30 @@ export default function AppShell() {
       try {
         let base64: string;
         let pdfThumb: string | undefined;
+        let wasCompressed = false;
+        let originalSize = file.size;
+        let finalSize = file.size;
 
         if (file.type === 'application/pdf') {
           const result = await renderPdfPage(file);
           base64 = result.base64;
           pdfThumb = result.thumbUrl;
+          wasCompressed = result.wasCompressed;
+          originalSize = result.originalSize;
+          finalSize = result.finalSize;
           setQueueItems(prev => prev.map(q => q.id === id ? { ...q, thumbUrl: pdfThumb } : q));
         } else {
-          base64 = await resizeImage(file);
+          const result = await resizeImage(file);
+          base64 = result.base64;
+          wasCompressed = result.wasCompressed;
+          originalSize = result.originalSize;
+          finalSize = result.finalSize;
         }
+
+        // Gerar aviso se foi compactado
+        const warning = wasCompressed 
+          ? `Arquivo compactado: ${formatFileSize(originalSize)} → ${formatFileSize(finalSize)}`
+          : undefined;
 
         const res = await fetch('/api/analyze', {
           method: 'POST',
@@ -133,7 +148,7 @@ export default function AppShell() {
           thumbUrl: pdfThumb ?? thumbUrl,
         };
         addExpenseToReport(rid, expense);
-        setQueueItems(prev => prev.map(q => q.id === id ? { ...q, status: 'done' } : q));
+        setQueueItems(prev => prev.map(q => q.id === id ? { ...q, status: 'done', warning } : q));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setQueueItems(prev => prev.map(q => q.id === id ? { ...q, status: 'error', error: msg } : q));
