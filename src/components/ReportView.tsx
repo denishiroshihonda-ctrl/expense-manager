@@ -2,7 +2,7 @@
 import { useRef, RefObject } from 'react';
 import { Project, Report, Category, CAT, fmt } from '@/lib/types';
 
-interface QItem { id: string; name: string; size: number; status: 'analyzing' | 'done' | 'error'; error?: string; thumbUrl?: string; }
+interface QItem { id: string; name: string; size: number; status: 'analyzing' | 'done' | 'error'; error?: string; warning?: string; thumbUrl?: string; }
 
 interface Props {
   project: Project;
@@ -105,6 +105,11 @@ export default function ReportView({ project, report, filter, queueItems, fileIn
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-medium truncate" style={{ color: 'var(--tx)' }}>{q.name}</div>
                   <div className="text-[10px]" style={{ color: 'var(--tx3)' }}>{(q.size / 1024).toFixed(0)} KB</div>
+                  {q.warning && (
+                    <div className="text-[10px] mt-1 px-2 py-1 rounded inline-flex items-center gap-1" style={{ color: '#f59e0b', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.3)' }}>
+                      <span>⚠️</span> {q.warning}
+                    </div>
+                  )}
                   {q.error && <div className="text-[10px] mt-1 p-1.5 rounded" style={{ color: '#ef4444', background: 'rgba(239,68,68,.1)', border: '1px solid #ef4444' }}>{q.error}</div>}
                 </div>
                 <div className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium flex-shrink-0 ${
