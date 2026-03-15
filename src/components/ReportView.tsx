@@ -106,17 +106,17 @@ export default function ReportView({ project, report, filter, queueItems, fileIn
                   <div className="text-[11px] font-medium truncate" style={{ color: 'var(--tx)' }}>{q.name}</div>
                   <div className="text-[10px]" style={{ color: 'var(--tx3)' }}>{(q.size / 1024).toFixed(0)} KB</div>
                   {q.warning && (
-                    <div className="text-[10px] mt-1 px-2 py-1 rounded inline-flex items-center gap-1" style={{ color: '#f59e0b', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.3)' }}>
+                    <div className="text-[10px] mt-1 px-2 py-1 rounded inline-flex items-center gap-1 font-medium" style={{ color: '#b45309', background: 'rgba(245,158,11,.15)', border: '1px solid rgba(180,83,9,.4)' }}>
                       <span>⚠️</span> {q.warning}
                     </div>
                   )}
-                  {q.error && <div className="text-[10px] mt-1 p-1.5 rounded" style={{ color: '#ef4444', background: 'rgba(239,68,68,.1)', border: '1px solid #ef4444' }}>{q.error}</div>}
+                  {q.error && <div className="text-[10px] mt-1 p-1.5 rounded" style={{ color: '#dc2626', background: 'rgba(239,68,68,.1)', border: '1px solid #dc2626' }}>{q.error}</div>}
                 </div>
-                <div className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium flex-shrink-0 ${
-                  q.status === 'analyzing' ? 'bg-blue-900/30 border border-blue-700/50 text-blue-400' :
-                  q.status === 'done' ? 'bg-emerald-900/30 border border-emerald-700/50 text-emerald-400' :
-                  'bg-red-900/30 border border-red-700/50 text-red-400'
-                }`}>
+                <div className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium flex-shrink-0" style={{
+                  background: q.status === 'analyzing' ? 'rgba(59,130,246,.15)' : q.status === 'done' ? 'rgba(16,185,129,.15)' : 'rgba(239,68,68,.15)',
+                  border: `1px solid ${q.status === 'analyzing' ? 'rgba(59,130,246,.5)' : q.status === 'done' ? 'rgba(16,185,129,.5)' : 'rgba(239,68,68,.5)'}`,
+                  color: q.status === 'analyzing' ? '#2563eb' : q.status === 'done' ? '#047857' : '#dc2626'
+                }}>
                   {q.status === 'analyzing' && <span className="spinner" style={{ width: 9, height: 9, borderWidth: 1.5 }} />}
                   {q.status === 'analyzing' ? ' Analisando' : q.status === 'done' ? '✓ Concluído' : '✕ Erro'}
                 </div>
@@ -155,16 +155,16 @@ export default function ReportView({ project, report, filter, queueItems, fileIn
                   return (
                     <tr key={e.id} style={{ borderBottom: '1px solid var(--brd)' }}>
                       <td className="px-3 py-2 text-[11px] max-w-[120px] truncate" style={{ color: 'var(--tx)' }}>{e.filename}</td>
-                      <td className="px-3 py-2"><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border ${cat.cls}`}>{cat.icon} {cat.label}</span></td>
+                      <td className="px-3 py-2"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium" style={{ color: cat.color, background: cat.bg, border: `1px solid ${cat.border}` }}>{cat.icon} {cat.label}</span></td>
                       <td className="px-3 py-2 text-[11px]" style={{ color: 'var(--tx)' }}>{e.establishment}</td>
                       <td className="px-3 py-2 text-[11px]" style={{ color: 'var(--tx3)', fontFamily: 'monospace' }}>{e.date}</td>
                       <td className="px-3 py-2 text-[11px]" style={{ fontFamily: 'monospace', color: 'var(--tx)' }}>{e.value != null ? fmt(e.value) : <span style={{ color: 'var(--tx3)' }}>—</span>}</td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1.5">
                           <div className="w-10 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--brd)' }}>
-                            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${e.confidence}%` }} />
+                            <div className="h-full rounded-full" style={{ width: `${e.confidence}%`, background: '#059669' }} />
                           </div>
-                          <span className="text-[9px]" style={{ color: 'var(--tx3)' }}>{e.confidence}%</span>
+                          <span className="text-[9px] font-medium" style={{ color: '#047857' }}>{e.confidence}%</span>
                         </div>
                       </td>
                       <td className="px-3 py-2">
