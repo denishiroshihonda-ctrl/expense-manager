@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Imagem ausente' }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const result = await model.generateContent([
       {
