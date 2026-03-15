@@ -17,8 +17,8 @@ export async function resizeImage(file: File): Promise<ResizeResult> {
       const img = new Image();
       img.onerror = () => reject(new Error('Falha ao decodificar: ' + file.name));
       img.onload = () => {
-        // Limite menor para arquivos grandes
-        const MAX = isLargeFile ? 900 : 1200;
+        // Resolução maior para preservar texto legível
+        const MAX = isLargeFile ? 1100 : 1200;
         let w = img.naturalWidth, h = img.naturalHeight;
         if (!w || !h) { reject(new Error('Dimensões inválidas')); return; }
         
@@ -32,13 +32,13 @@ export async function resizeImage(file: File): Promise<ResizeResult> {
         c.width = w; c.height = h;
         c.getContext('2d')!.drawImage(img, 0, 0, w, h);
         
-        // Qualidade menor para arquivos grandes
-        const quality = isLargeFile ? 0.55 : 0.75;
+        // Qualidade maior para preservar texto legível (OCR precisa de nitidez)
+        const quality = isLargeFile ? 0.70 : 0.75;
         let b64 = c.toDataURL('image/jpeg', quality).split(',')[1];
         
-        // Se ainda estiver grande, comprimir mais
-        if (b64.length > 900_000) {
-          b64 = c.toDataURL('image/jpeg', 0.45).split(',')[1];
+        // Se ainda estiver muito grande (>1.5MB em base64), comprimir um pouco mais
+        if (b64.length > 1_500_000) {
+          b64 = c.toDataURL('image/jpeg', 0.60).split(',')[1];
         }
         
         const finalSize = Math.round(b64.length * 0.75); // base64 é ~33% maior que binário
