@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PROMPT = `Você é especialista em análise de comprovantes fiscais e recibos de despesas corporativas brasileiros.
 Analise a imagem (NFC-e, recibo Uber/99, hotel, passagem aérea, etc.).
@@ -19,42 +19,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Imagem ausente' }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const message = await client.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+          { type: 'text', text: PROMPT },
+        ],
+      }],
+    });
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: base64,
-        },
-      },
-      PROMPT,
-    ]);
-
-    const response = await result.response;
-    const txt = response.text() ?? '{}';
-    
+    const txt = message.content.find((b) => b.type === 'text')?.text ?? '{}';
     let clean = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    let parsed: Record<string, unknown> = {};
+    let result: Record<string, unknown> = {};
     
-    try {
-      parsed = JSON.parse(clean);
-    } catch {
-      const m = clean.match(/\{[\s\S]*\}/);
-      if (m) {
-        try {
-          parsed = JSON.parse(m[0]);
-        } catch {}
-      }
+    try { 
+      result = JSON.parse(clean); 
+    } catch { 
+      const m = clean.match(/\{[\s\S]*\}/); 
+      if (m) { 
+        try { result = JSON.parse(m[0]); } catch {} 
+      } 
     }
 
     return NextResponse.json({
-      category: parsed.category ?? 'other',
-      establishment: parsed.establishment ?? 'Não identificado',
-      date: parsed.date ?? '—',
-      value: parsed.value != null ? parseFloat(String(parsed.value)) : null,
-      description: parsed.description ?? filename ?? '',
-      confidence: parsed.confidence ?? 50,
+      category: result.category ?? 'other',
+      establishment: result.establishment ?? 'Não identificado',
+      date: result.date ?? '—',
+      value: result.value != null ? parseFloat(String(result.value)) : null,
+      description: result.description ?? filename ?? '',
+      confidence: result.confidence ?? 50,
     });
   } catch (err) {
     console.error('[analyze]', err);
