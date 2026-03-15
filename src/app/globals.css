@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tema escuro (padrão) */
 :root {
   --bg: #0f1117;
   --bg2: #161b27;
@@ -11,6 +12,19 @@
   --brd2: #3a4a60;
   --tx: #e2e8f0;
   --tx2: #94a3b8;
+  --tx3: #64748b;
+}
+
+/* Tema claro */
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg2: #ffffff;
+  --surf: #f1f5f9;
+  --surf2: #e2e8f0;
+  --brd: #cbd5e1;
+  --brd2: #94a3b8;
+  --tx: #1e293b;
+  --tx2: #475569;
   --tx3: #64748b;
 }
 
