@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Project, Report, Expense, Category, CAT, COLORS, fmt } from '@/lib/types';
 import { resizeImage, renderPdfPage, formatFileSize } from '@/lib/fileUtils';
 import Sidebar from './Sidebar';
@@ -9,14 +9,53 @@ import ProjectModal from './ProjectModal';
 import ReportModal from './ReportModal';
 import ExpenseModal from './ExpenseModal';
 
+const STORAGE_KEY = 'expense-manager-data';
+
 let _id = 1;
 const uid = () => String(_id++);
+
+// Carregar dados do localStorage
+function loadFromStorage(): { projects: Project[]; nextId: number } {
+  if (typeof window === 'undefined') return { projects: [], nextId: 1 };
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (data) {
+      const parsed = JSON.parse(data);
+      return { 
+        projects: parsed.projects ?? [], 
+        nextId: parsed.nextId ?? 1 
+      };
+    }
+  } catch (e) {
+    console.error('Erro ao carregar dados:', e);
+  }
+  return { projects: [], nextId: 1 };
+}
+
+// Salvar dados no localStorage
+function saveToStorage(projects: Project[], nextId: number) {
+  if (typeof window === 'undefined') return;
+  try {
+    // Remove thumbUrl antes de salvar (são URLs temporárias)
+    const cleanProjects = projects.map(p => ({
+      ...p,
+      reports: p.reports.map(r => ({
+        ...r,
+        expenses: r.expenses.map(e => ({ ...e, thumbUrl: undefined }))
+      }))
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects: cleanProjects, nextId }));
+  } catch (e) {
+    console.error('Erro ao salvar dados:', e);
+  }
+}
 
 export default function AppShell() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activePid, setActivePid] = useState<string | null>(null);
   const [activeRid, setActiveRid] = useState<string | null>(null);
   const [filter, setFilter] = useState<Category | 'all'>('all');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const [showPM, setShowPM] = useState(false);
   const [showRM, setShowRM] = useState(false);
@@ -28,6 +67,23 @@ export default function AppShell() {
   const [queueItems, setQueueItems] = useState<{ id: string; name: string; size: number; status: 'analyzing' | 'done' | 'error'; error?: string; warning?: string; thumbUrl?: string }[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Carregar dados ao iniciar
+  useEffect(() => {
+    const { projects: savedProjects, nextId } = loadFromStorage();
+    if (savedProjects.length > 0) {
+      setProjects(savedProjects);
+      _id = nextId;
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // Salvar dados quando projects mudar
+  useEffect(() => {
+    if (isLoaded) {
+      saveToStorage(projects, _id);
+    }
+  }, [projects, isLoaded]);
 
   const ap = () => projects.find(p => p.id === activePid) ?? null;
   const ar = () => { const p = ap(); return p ? p.reports.find(r => r.id === activeRid) ?? null : null; };
@@ -179,6 +235,18 @@ export default function AppShell() {
   const activeProject = ap();
   const activeReport = ar();
   const grandTotal = projects.reduce((s, p) => s + p.reports.reduce((ss, r) => ss + r.expenses.reduce((sss, e) => sss + (e.value ?? 0), 0), 0), 0);
+
+  // Mostrar loading enquanto carrega dados do localStorage
+  if (!isLoaded) {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg)' }}>
+        <div className="text-center">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl mx-auto mb-3" style={{ background: 'var(--surf)', border: '1px solid var(--brd)' }}>📋</div>
+          <div className="text-sm" style={{ color: 'var(--tx3)' }}>Carregando...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
