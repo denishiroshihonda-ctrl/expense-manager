@@ -26,12 +26,13 @@ export interface Project {
   reports: Report[];
 }
 
-export const CAT: Record<Category, { label: string; icon: string; cls: string }> = {
-  restaurant: { label: 'Alimentação', icon: '🍽', cls: 'text-amber-400 bg-amber-900/30 border-amber-700/50' },
-  transport:  { label: 'Transporte',  icon: '🚗', cls: 'text-blue-400  bg-blue-900/30  border-blue-700/50'  },
-  hotel:      { label: 'Hospedagem',  icon: '🏨', cls: 'text-green-400 bg-green-900/30 border-green-700/50' },
-  flight:     { label: 'Passagem Aérea', icon: '✈️', cls: 'text-red-400 bg-red-900/30 border-red-700/50' },
-  other:      { label: 'Outros',      icon: '📄', cls: 'text-slate-400 bg-slate-800/50 border-slate-600/50' },
+// Cores fixas que funcionam em ambos os temas
+export const CAT: Record<Category, { label: string; icon: string; color: string; bg: string; border: string }> = {
+  restaurant: { label: 'Alimentação', icon: '🍽', color: '#b45309', bg: 'rgba(245,158,11,.15)', border: 'rgba(180,83,9,.4)' },
+  transport:  { label: 'Transporte',  icon: '🚗', color: '#2563eb', bg: 'rgba(59,130,246,.15)', border: 'rgba(37,99,235,.4)' },
+  hotel:      { label: 'Hospedagem',  icon: '🏨', color: '#047857', bg: 'rgba(16,185,129,.15)', border: 'rgba(4,120,87,.4)' },
+  flight:     { label: 'Passagem Aérea', icon: '✈️', color: '#dc2626', bg: 'rgba(239,68,68,.15)', border: 'rgba(220,38,38,.4)' },
+  other:      { label: 'Outros',      icon: '📄', color: '#64748b', bg: 'rgba(100,116,139,.15)', border: 'rgba(100,116,139,.4)' },
 };
 
 export const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
