@@ -6,7 +6,6 @@ interface Props {
   activePid: string | null;
   activeRid: string | null;
   grandTotal: number;
-  user: { name: string; avatar?: string };
   onSelectReport: (pid: string, rid: string) => void;
   onToggleProject: (pid: string) => void;
   onNewProject: () => void;
@@ -14,10 +13,9 @@ interface Props {
   onDeleteProject: (pid: string) => void;
   onNewReport: (pid: string) => void;
   onDeleteReport: (pid: string, rid: string) => void;
-  onSignOut: () => void;
 }
 
-export default function Sidebar({ projects, activePid, activeRid, grandTotal, user, onSelectReport, onToggleProject, onNewProject, onEditProject, onDeleteProject, onNewReport, onDeleteReport, onSignOut }: Props) {
+export default function Sidebar({ projects, activePid, activeRid, grandTotal, onSelectReport, onToggleProject, onNewProject, onEditProject, onDeleteProject, onNewReport, onDeleteReport }: Props) {
   return (
     <aside className="flex flex-col flex-shrink-0 overflow-hidden" style={{ width: 256, background: 'var(--bg2)', borderRight: '1px solid var(--brd)' }}>
       {/* Header */}
@@ -108,16 +106,9 @@ export default function Sidebar({ projects, activePid, activeRid, grandTotal, us
 
       {/* Footer */}
       <div className="p-2" style={{ borderTop: '1px solid var(--brd)' }}>
-        <div className="rounded-lg p-2.5 mb-2" style={{ background: 'var(--surf)', border: '1px solid var(--brd)' }}>
+        <div className="rounded-lg p-2.5" style={{ background: 'var(--surf)', border: '1px solid var(--brd)' }}>
           <div className="text-[9px] font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--tx3)' }}>Total geral</div>
           <div className="text-base font-semibold" style={{ color: '#3b82f6', fontFamily: 'monospace' }}>{fmt(grandTotal)}</div>
-        </div>
-        <div className="flex items-center gap-2 px-1">
-          {user.avatar && <img src={user.avatar} className="w-6 h-6 rounded-full flex-shrink-0" />}
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-medium truncate" style={{ color: 'var(--tx2)' }}>{user.name}</div>
-          </div>
-          <button onClick={onSignOut} className="text-[10px] px-2 py-1 rounded" style={{ color: 'var(--tx3)', border: '1px solid var(--brd)' }}>Sair</button>
         </div>
       </div>
     </aside>
