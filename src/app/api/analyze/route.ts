@@ -50,7 +50,9 @@ export async function POST(req: Request) {
       date: result.date ?? '—',
       value: result.value != null ? parseFloat(String(result.value)) : null,
       description: result.description ?? filename ?? '',
-      confidence: result.confidence ?? 50,
+      confidence: result.confidence != null 
+  ? (result.confidence <= 1 ? Math.round(result.confidence * 100) : result.confidence) 
+  : 50,
     });
   } catch (err) {
     console.error('[analyze]', err);
