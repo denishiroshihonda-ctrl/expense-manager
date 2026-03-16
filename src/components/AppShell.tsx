@@ -260,40 +260,135 @@ export default function AppShell() {
     setIsExportingPDF(true);
     
     try {
-      // Preparar dados (sem imagens por enquanto - simplificado)
-      const expensesData = r.expenses.map((e) => ({
-        id: e.id,
-        filename: e.filename,
-        category: e.category,
-        establishment: e.establishment,
-        date: e.date,
-        value: e.value,
-        confidence: e.confidence,
-        imageBase64: undefined, // Imagens serão adicionadas em versão futura
-      }));
-
-      const reportData = {
-        projectName: p!.name,
-        projectCode: p!.code || '',
-        reportName: r.name,
-        expenses: expensesData,
-        generatedAt: new Date().toLocaleString('pt-BR'),
-      };
-
-      // Chamar API para gerar HTML
-      const response = await fetch('/api/export-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reportData),
+      // Calcular totais por categoria
+      const totals: Record<string, { count: number; value: number }> = {};
+      let grandTotal = 0;
+      
+      r.expenses.forEach(e => {
+        if (!totals[e.category]) {
+          totals[e.category] = { count: 0, value: 0 };
+        }
+        totals[e.category].count++;
+        totals[e.category].value += e.value || 0;
+        grandTotal += e.value || 0;
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Erro ao gerar PDF');
-      }
-      
-      const { html } = await response.json();
-      
+      const catLabels: Record<string, string> = {
+        restaurant: 'Alimentação',
+        transport: 'Transporte',
+        hotel: 'Hospedagem',
+        flight: 'Passagem Aérea',
+        other: 'Outros',
+      };
+
+      const fmtCurrency = (v: number) => 
+        'R$ ' + v.toFixed(2).replace('.', ',');
+
+      // Gerar HTML diretamente
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${r.name} - Expense Manager</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.4; }
+    .page { padding: 30px; max-width: 800px; margin: 0 auto; }
+    .header { border-bottom: 2px solid #3b82f6; padding-bottom: 15px; margin-bottom: 20px; }
+    .logo { font-size: 18px; font-weight: bold; color: #3b82f6; }
+    .subtitle { font-size: 10px; color: #666; }
+    .project-info { margin-top: 12px; padding: 10px; background: #f5f5f5; border-radius: 4px; }
+    .project-name { font-size: 14px; font-weight: 600; }
+    .project-code { display: inline-block; margin-top: 5px; padding: 2px 6px; background: #dbeafe; color: #2563eb; border-radius: 3px; font-family: monospace; font-size: 10px; }
+    .report-name { margin-top: 5px; font-size: 11px; color: #666; }
+    .summary { margin-bottom: 20px; }
+    .summary h2 { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; margin-bottom: 10px; }
+    .summary-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .summary-card { flex: 1; min-width: 120px; padding: 10px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; }
+    .summary-card.total { background: #dbeafe; border-color: #93c5fd; }
+    .summary-label { font-size: 9px; font-weight: 600; color: #666; text-transform: uppercase; }
+    .summary-value { font-size: 13px; font-weight: 600; margin-top: 3px; }
+    .summary-card.total .summary-value { color: #2563eb; }
+    .summary-count { font-size: 9px; color: #999; margin-top: 2px; }
+    .expenses h2 { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 8px; background: #f5f5f5; border-bottom: 1px solid #ddd; font-size: 9px; font-weight: 600; color: #666; text-transform: uppercase; }
+    td { padding: 8px; border-bottom: 1px solid #eee; }
+    .cat { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
+    .cat-restaurant { background: #fef3c7; color: #b45309; }
+    .cat-transport { background: #dbeafe; color: #2563eb; }
+    .cat-hotel { background: #d1fae5; color: #047857; }
+    .cat-flight { background: #fee2e2; color: #dc2626; }
+    .cat-other { background: #f1f5f9; color: #64748b; }
+    .value { font-family: monospace; font-weight: 600; }
+    .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center; font-size: 9px; color: #999; }
+    @media print { .page { padding: 15px; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="logo">Expense Manager</div>
+      <div class="subtitle">Relatório de Despesas</div>
+      <div class="project-info">
+        <div class="project-name">${p!.name}</div>
+        ${p!.code ? `<span class="project-code">${p!.code}</span>` : ''}
+        <div class="report-name">${r.name}</div>
+      </div>
+    </div>
+
+    <div class="summary">
+      <h2>Resumo por Categoria</h2>
+      <div class="summary-grid">
+        ${Object.entries(totals).map(([cat, data]) => `
+          <div class="summary-card">
+            <div class="summary-label">${catLabels[cat] || cat}</div>
+            <div class="summary-value">${fmtCurrency(data.value)}</div>
+            <div class="summary-count">${data.count} item(s)</div>
+          </div>
+        `).join('')}
+        <div class="summary-card total">
+          <div class="summary-label">Total Geral</div>
+          <div class="summary-value">${fmtCurrency(grandTotal)}</div>
+          <div class="summary-count">${r.expenses.length} documento(s)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="expenses">
+      <h2>Lista de Despesas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Arquivo</th>
+            <th>Categoria</th>
+            <th>Estabelecimento</th>
+            <th>Data</th>
+            <th>Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${r.expenses.map(e => `
+            <tr>
+              <td>${e.filename}</td>
+              <td><span class="cat cat-${e.category}">${catLabels[e.category] || e.category}</span></td>
+              <td>${e.establishment}</td>
+              <td>${e.date}</td>
+              <td class="value">${e.value != null ? fmtCurrency(e.value) : '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      Gerado em ${new Date().toLocaleString('pt-BR')} • Expense Manager
+    </div>
+  </div>
+</body>
+</html>`;
+
       // Abrir nova janela com o HTML para impressão
       const printWindow = window.open('', '_blank');
       if (printWindow) {
@@ -304,6 +399,8 @@ export default function AppShell() {
         setTimeout(() => {
           printWindow.print();
         }, 300);
+      } else {
+        alert('Popup bloqueado. Permita popups para este site.');
       }
     } catch (error) {
       console.error('Erro ao exportar PDF:', error);
