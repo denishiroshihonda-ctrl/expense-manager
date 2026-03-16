@@ -260,58 +260,23 @@ export default function AppShell() {
     setIsExportingPDF(true);
     
     try {
-      // Preparar dados com imagens compactadas
-      const expensesWithImages = await Promise.all(
-        r.expenses.map(async (e) => {
-          let imageBase64 = e.thumbUrl;
-          
-          // Se temos thumbUrl (blob URL), converter para base64 compactado
-          if (e.thumbUrl && e.thumbUrl.startsWith('blob:')) {
-            try {
-              const response = await fetch(e.thumbUrl);
-              const blob = await response.blob();
-              
-              // Criar canvas para comprimir
-              const img = new Image();
-              const canvas = document.createElement('canvas');
-              
-              await new Promise<void>((resolve, reject) => {
-                img.onload = () => {
-                  // Redimensionar para miniatura (max 300px)
-                  const MAX = 300;
-                  let w = img.width, h = img.height;
-                  if (w > MAX || h > MAX) {
-                    if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-                    else { w = Math.round(w * MAX / h); h = MAX; }
-                  }
-                  canvas.width = w;
-                  canvas.height = h;
-                  canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
-                  resolve();
-                };
-                img.onerror = reject;
-                img.src = URL.createObjectURL(blob);
-              });
-              
-              imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
-            } catch (err) {
-              console.error('Erro ao processar imagem:', err);
-              imageBase64 = undefined;
-            }
-          }
-          
-          return {
-            ...e,
-            imageBase64,
-          };
-        })
-      );
+      // Preparar dados (sem imagens por enquanto - simplificado)
+      const expensesData = r.expenses.map((e) => ({
+        id: e.id,
+        filename: e.filename,
+        category: e.category,
+        establishment: e.establishment,
+        date: e.date,
+        value: e.value,
+        confidence: e.confidence,
+        imageBase64: undefined, // Imagens serão adicionadas em versão futura
+      }));
 
       const reportData = {
         projectName: p!.name,
         projectCode: p!.code || '',
         reportName: r.name,
-        expenses: expensesWithImages,
+        expenses: expensesData,
         generatedAt: new Date().toLocaleString('pt-BR'),
       };
 
@@ -322,7 +287,10 @@ export default function AppShell() {
         body: JSON.stringify(reportData),
       });
 
-      if (!response.ok) throw new Error('Erro ao gerar PDF');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erro ao gerar PDF');
+      }
       
       const { html } = await response.json();
       
@@ -332,12 +300,10 @@ export default function AppShell() {
         printWindow.document.write(html);
         printWindow.document.close();
         
-        // Aguardar imagens carregarem e imprimir
-        printWindow.onload = () => {
-          setTimeout(() => {
-            printWindow.print();
-          }, 500);
-        };
+        // Aguardar e imprimir
+        setTimeout(() => {
+          printWindow.print();
+        }, 300);
       }
     } catch (error) {
       console.error('Erro ao exportar PDF:', error);
