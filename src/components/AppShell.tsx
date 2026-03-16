@@ -220,6 +220,7 @@ export default function AppShell() {
           description: data.description ?? file.name,
           confidence: data.confidence ?? 50,
           thumbUrl: pdfThumb ?? thumbUrl,
+          imageBase64: base64, // Salvar imagem em alta qualidade para PDF
         };
         addExpenseToReport(rid, expense);
         setQueueItems(prev => prev.map(q => q.id === id ? { ...q, status: 'done', warning } : q));
@@ -258,7 +259,7 @@ export default function AppShell() {
     if (!r || !r.expenses.length) { alert('Nenhum dado para exportar.'); return; }
     
     // Verificar quantas imagens estão disponíveis
-    const imageCount = r.expenses.filter(e => e.thumbUrl).length;
+    const imageCount = r.expenses.filter(e => e.imageBase64).length;
     const totalCount = r.expenses.length;
     
     // Mostrar aviso sobre imagens
@@ -310,47 +311,12 @@ export default function AppShell() {
       const fmtCurrency = (v: number) => 
         'R$ ' + v.toFixed(2).replace('.', ',');
 
-      // Coletar imagens base64 dos thumbUrls disponíveis - ALTA QUALIDADE
-      const expensesWithImages = await Promise.all(
-        sortedExpenses.map(async (e) => {
-          let imageBase64: string | undefined = undefined;
-          
-          if (e.thumbUrl && e.thumbUrl.startsWith('blob:')) {
-            try {
-              const response = await fetch(e.thumbUrl);
-              const blob = await response.blob();
-              
-              const img = new Image();
-              const canvas = document.createElement('canvas');
-              
-              await new Promise<void>((resolve, reject) => {
-                img.onload = () => {
-                  // Usar tamanho original ou reduzir apenas se muito grande
-                  const MAX = 1400; // Resolução alta para legibilidade
-                  let w = img.width, h = img.height;
-                  if (w > MAX || h > MAX) {
-                    if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-                    else { w = Math.round(w * MAX / h); h = MAX; }
-                  }
-                  canvas.width = w;
-                  canvas.height = h;
-                  canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
-                  resolve();
-                };
-                img.onerror = () => resolve();
-                img.src = URL.createObjectURL(blob);
-              });
-              
-              // Qualidade alta (0.92) para preservar texto legível
-              imageBase64 = canvas.toDataURL('image/jpeg', 0.92);
-            } catch (err) {
-              console.error('Erro ao processar imagem:', err);
-            }
-          }
-          
-          return { ...e, imageBase64 };
-        })
-      );
+      // Usar imagens de alta qualidade já salvas nas despesas
+      const expensesWithImages = sortedExpenses.map((e) => ({
+        ...e,
+        // Usar imageBase64 se disponível, senão null
+        imageForPdf: e.imageBase64 ? `data:image/jpeg;base64,${e.imageBase64}` : undefined,
+      }));
 
       // Gerar HTML com design sóbrio em preto e branco
       const html = `
@@ -605,8 +571,8 @@ export default function AppShell() {
               ${e.value != null ? fmtCurrency(e.value) : '—'}
             </div>
           </div>
-          ${e.imageBase64 
-            ? `<img class="receipt-image" src="${e.imageBase64}" alt="${e.filename}" />`
+          ${e.imageForPdf 
+            ? `<img class="receipt-image" src="${e.imageForPdf}" alt="${e.filename}" />`
             : `<div class="no-image">Imagem não disponível</div>`
           }
         </div>
