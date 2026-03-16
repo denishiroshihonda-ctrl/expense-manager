@@ -310,7 +310,7 @@ export default function AppShell() {
       const fmtCurrency = (v: number) => 
         'R$ ' + v.toFixed(2).replace('.', ',');
 
-      // Coletar imagens base64 dos thumbUrls disponíveis
+      // Coletar imagens base64 dos thumbUrls disponíveis - ALTA QUALIDADE
       const expensesWithImages = await Promise.all(
         sortedExpenses.map(async (e) => {
           let imageBase64: string | undefined = undefined;
@@ -325,8 +325,8 @@ export default function AppShell() {
               
               await new Promise<void>((resolve, reject) => {
                 img.onload = () => {
-                  // Tamanho maior para boa visualização (max 500px)
-                  const MAX = 500;
+                  // Usar tamanho original ou reduzir apenas se muito grande
+                  const MAX = 1400; // Resolução alta para legibilidade
                   let w = img.width, h = img.height;
                   if (w > MAX || h > MAX) {
                     if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
@@ -337,11 +337,12 @@ export default function AppShell() {
                   canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
                   resolve();
                 };
-                img.onerror = () => resolve(); // Não falhar se imagem não carregar
+                img.onerror = () => resolve();
                 img.src = URL.createObjectURL(blob);
               });
               
-              imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+              // Qualidade alta (0.92) para preservar texto legível
+              imageBase64 = canvas.toDataURL('image/jpeg', 0.92);
             } catch (err) {
               console.error('Erro ao processar imagem:', err);
             }
@@ -466,7 +467,7 @@ export default function AppShell() {
       font-size: 9pt;
     }
     
-    /* Comprovantes */
+    /* Comprovantes - cada um em página própria para máxima legibilidade */
     .receipts { 
       page-break-before: always; 
     }
@@ -478,37 +479,44 @@ export default function AppShell() {
       margin-bottom: 20px; 
     }
     .receipt { 
+      page-break-after: always;
       page-break-inside: avoid; 
-      margin-bottom: 25px;
       border: 1px solid #000;
       padding: 15px;
+      min-height: 85vh;
+    }
+    .receipt:last-child {
+      page-break-after: auto;
     }
     .receipt-header {
-      font-size: 10pt;
-      margin-bottom: 10px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #ccc;
+      font-size: 11pt;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #000;
     }
     .receipt-filename { 
       font-weight: bold;
+      font-size: 12pt;
     }
     .receipt-details {
-      font-size: 9pt;
-      color: #333;
+      font-size: 10pt;
+      color: #000;
+      margin-top: 5px;
     }
     .receipt-image { 
-      max-width: 100%; 
-      max-height: 45vh;
+      width: 100%;
+      max-height: 75vh;
+      object-fit: contain;
       display: block;
-      margin: 0 auto;
-      border: 1px solid #ccc;
+      margin: 10px auto;
     }
     .no-image {
       text-align: center;
-      padding: 40px;
+      padding: 60px;
       background: #f5f5f5;
       color: #666;
       font-style: italic;
+      font-size: 12pt;
     }
     
     /* Rodapé */
