@@ -203,8 +203,12 @@ export default function AppShell() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ base64, filename: file.name }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        
         const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || `Erro HTTP ${res.status}`);
+        }
 
         const expense: Expense = {
           id,
