@@ -257,14 +257,40 @@ export default function AppShell() {
     const p = ap(), r = ar();
     if (!r || !r.expenses.length) { alert('Nenhum dado para exportar.'); return; }
     
+    // Verificar quantas imagens estão disponíveis
+    const imageCount = r.expenses.filter(e => e.thumbUrl).length;
+    const totalCount = r.expenses.length;
+    
+    // Mostrar aviso sobre imagens
+    const message = imageCount === 0
+      ? `Nenhuma imagem disponível para o PDF.\n\nAs imagens só ficam disponíveis para comprovantes enviados na sessão atual. Após recarregar a página, as imagens são perdidas.\n\nO PDF será gerado apenas com a tabela de despesas.\n\nDeseja continuar?`
+      : imageCount < totalCount
+        ? `${imageCount} de ${totalCount} imagens disponíveis.\n\nAs imagens só ficam disponíveis para comprovantes enviados na sessão atual. Comprovantes de sessões anteriores aparecerão sem imagem.\n\nDeseja continuar?`
+        : `Todas as ${totalCount} imagens estão disponíveis.\n\nDeseja gerar o PDF?`;
+    
+    if (!confirm(message)) return;
+    
     setIsExportingPDF(true);
     
     try {
+      // Ordenar despesas por data
+      const sortedExpenses = [...r.expenses].sort((a, b) => {
+        const parseDate = (d: string) => {
+          if (!d || d === '—') return 0;
+          const parts = d.split('/');
+          if (parts.length === 3) {
+            return new Date(+parts[2], +parts[1] - 1, +parts[0]).getTime();
+          }
+          return 0;
+        };
+        return parseDate(a.date) - parseDate(b.date);
+      });
+
       // Calcular totais por categoria
       const totals: Record<string, { count: number; value: number }> = {};
       let grandTotal = 0;
       
-      r.expenses.forEach(e => {
+      sortedExpenses.forEach(e => {
         if (!totals[e.category]) {
           totals[e.category] = { count: 0, value: 0 };
         }
@@ -284,106 +310,304 @@ export default function AppShell() {
       const fmtCurrency = (v: number) => 
         'R$ ' + v.toFixed(2).replace('.', ',');
 
-      // Gerar HTML diretamente
+      // Coletar imagens base64 dos thumbUrls disponíveis
+      const expensesWithImages = await Promise.all(
+        sortedExpenses.map(async (e) => {
+          let imageBase64: string | undefined = undefined;
+          
+          if (e.thumbUrl && e.thumbUrl.startsWith('blob:')) {
+            try {
+              const response = await fetch(e.thumbUrl);
+              const blob = await response.blob();
+              
+              const img = new Image();
+              const canvas = document.createElement('canvas');
+              
+              await new Promise<void>((resolve, reject) => {
+                img.onload = () => {
+                  // Tamanho maior para boa visualização (max 500px)
+                  const MAX = 500;
+                  let w = img.width, h = img.height;
+                  if (w > MAX || h > MAX) {
+                    if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                    else { w = Math.round(w * MAX / h); h = MAX; }
+                  }
+                  canvas.width = w;
+                  canvas.height = h;
+                  canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+                  resolve();
+                };
+                img.onerror = () => resolve(); // Não falhar se imagem não carregar
+                img.src = URL.createObjectURL(blob);
+              });
+              
+              imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            } catch (err) {
+              console.error('Erro ao processar imagem:', err);
+            }
+          }
+          
+          return { ...e, imageBase64 };
+        })
+      );
+
+      // Gerar HTML com design sóbrio em preto e branco
       const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>${r.name} - Expense Manager</title>
+  <title>${r.name} - Relatório de Despesas</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.4; }
-    .page { padding: 30px; max-width: 800px; margin: 0 auto; }
-    .header { border-bottom: 2px solid #3b82f6; padding-bottom: 15px; margin-bottom: 20px; }
-    .logo { font-size: 18px; font-weight: bold; color: #3b82f6; }
-    .subtitle { font-size: 10px; color: #666; }
-    .project-info { margin-top: 12px; padding: 10px; background: #f5f5f5; border-radius: 4px; }
-    .project-name { font-size: 14px; font-weight: 600; }
-    .project-code { display: inline-block; margin-top: 5px; padding: 2px 6px; background: #dbeafe; color: #2563eb; border-radius: 3px; font-family: monospace; font-size: 10px; }
-    .report-name { margin-top: 5px; font-size: 11px; color: #666; }
-    .summary { margin-bottom: 20px; }
-    .summary h2 { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; margin-bottom: 10px; }
-    .summary-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-    .summary-card { flex: 1; min-width: 120px; padding: 10px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; }
-    .summary-card.total { background: #dbeafe; border-color: #93c5fd; }
-    .summary-label { font-size: 9px; font-weight: 600; color: #666; text-transform: uppercase; }
-    .summary-value { font-size: 13px; font-weight: 600; margin-top: 3px; }
-    .summary-card.total .summary-value { color: #2563eb; }
-    .summary-count { font-size: 9px; color: #999; margin-top: 2px; }
-    .expenses h2 { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; margin-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; padding: 8px; background: #f5f5f5; border-bottom: 1px solid #ddd; font-size: 9px; font-weight: 600; color: #666; text-transform: uppercase; }
-    td { padding: 8px; border-bottom: 1px solid #eee; }
-    .cat { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
-    .cat-restaurant { background: #fef3c7; color: #b45309; }
-    .cat-transport { background: #dbeafe; color: #2563eb; }
-    .cat-hotel { background: #d1fae5; color: #047857; }
-    .cat-flight { background: #fee2e2; color: #dc2626; }
-    .cat-other { background: #f1f5f9; color: #64748b; }
-    .value { font-family: monospace; font-weight: 600; }
-    .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center; font-size: 9px; color: #999; }
-    @media print { .page { padding: 15px; } }
+    body { 
+      font-family: 'Times New Roman', Times, serif; 
+      font-size: 11pt; 
+      color: #000; 
+      line-height: 1.5;
+      background: #fff;
+    }
+    .page { 
+      padding: 2cm; 
+      max-width: 21cm; 
+      margin: 0 auto; 
+    }
+    
+    /* Cabeçalho */
+    .header { 
+      border-bottom: 2px solid #000; 
+      padding-bottom: 15px; 
+      margin-bottom: 25px; 
+    }
+    .header h1 { 
+      font-size: 18pt; 
+      font-weight: bold; 
+      margin-bottom: 5px;
+    }
+    .header-info { 
+      font-size: 10pt; 
+      color: #333;
+    }
+    .header-info span { 
+      margin-right: 20px; 
+    }
+    
+    /* Resumo */
+    .summary { 
+      margin-bottom: 30px; 
+    }
+    .summary h2 { 
+      font-size: 12pt; 
+      font-weight: bold; 
+      border-bottom: 1px solid #000; 
+      padding-bottom: 5px; 
+      margin-bottom: 15px; 
+    }
+    .summary-table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-bottom: 10px;
+    }
+    .summary-table td { 
+      padding: 5px 10px; 
+      border: 1px solid #000; 
+    }
+    .summary-table td:first-child { 
+      font-weight: bold; 
+      width: 200px;
+    }
+    .summary-table td:last-child { 
+      text-align: right; 
+      font-family: 'Courier New', monospace;
+    }
+    .summary-table tr:last-child { 
+      font-weight: bold; 
+      background: #f0f0f0;
+    }
+    
+    /* Tabela de despesas */
+    .expenses { 
+      margin-bottom: 30px; 
+    }
+    .expenses h2 { 
+      font-size: 12pt; 
+      font-weight: bold; 
+      border-bottom: 1px solid #000; 
+      padding-bottom: 5px; 
+      margin-bottom: 15px; 
+    }
+    .expenses-table { 
+      width: 100%; 
+      border-collapse: collapse; 
+    }
+    .expenses-table th { 
+      text-align: left; 
+      padding: 8px; 
+      border: 1px solid #000; 
+      background: #f0f0f0; 
+      font-size: 10pt;
+      font-weight: bold;
+    }
+    .expenses-table td { 
+      padding: 8px; 
+      border: 1px solid #000; 
+      font-size: 10pt;
+      vertical-align: top;
+    }
+    .expenses-table td.value { 
+      text-align: right; 
+      font-family: 'Courier New', monospace;
+    }
+    .expenses-table td.date { 
+      white-space: nowrap;
+    }
+    .expenses-table td.code { 
+      font-family: 'Courier New', monospace;
+      font-size: 9pt;
+    }
+    
+    /* Comprovantes */
+    .receipts { 
+      page-break-before: always; 
+    }
+    .receipts h2 { 
+      font-size: 12pt; 
+      font-weight: bold; 
+      border-bottom: 1px solid #000; 
+      padding-bottom: 5px; 
+      margin-bottom: 20px; 
+    }
+    .receipt { 
+      page-break-inside: avoid; 
+      margin-bottom: 25px;
+      border: 1px solid #000;
+      padding: 15px;
+    }
+    .receipt-header {
+      font-size: 10pt;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #ccc;
+    }
+    .receipt-filename { 
+      font-weight: bold;
+    }
+    .receipt-details {
+      font-size: 9pt;
+      color: #333;
+    }
+    .receipt-image { 
+      max-width: 100%; 
+      max-height: 45vh;
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #ccc;
+    }
+    .no-image {
+      text-align: center;
+      padding: 40px;
+      background: #f5f5f5;
+      color: #666;
+      font-style: italic;
+    }
+    
+    /* Rodapé */
+    .footer { 
+      margin-top: 40px; 
+      padding-top: 15px; 
+      border-top: 1px solid #000; 
+      font-size: 9pt; 
+      color: #666;
+      text-align: center;
+    }
+    
+    @media print {
+      .page { padding: 1cm; }
+      .receipt { page-break-inside: avoid; }
+      .receipts { page-break-before: always; }
+    }
   </style>
 </head>
 <body>
   <div class="page">
+    <!-- Cabeçalho -->
     <div class="header">
-      <div class="logo">Expense Manager</div>
-      <div class="subtitle">Relatório de Despesas</div>
-      <div class="project-info">
-        <div class="project-name">${p!.name}</div>
-        ${p!.code ? `<span class="project-code">${p!.code}</span>` : ''}
-        <div class="report-name">${r.name}</div>
+      <h1>Relatório de Despesas</h1>
+      <div class="header-info">
+        <span><strong>Projeto:</strong> ${p!.name}</span>
+        ${p!.code ? `<span><strong>Código:</strong> ${p!.code}</span>` : ''}
+        <span><strong>Relatório:</strong> ${r.name}</span>
       </div>
     </div>
 
+    <!-- Resumo por Categoria -->
     <div class="summary">
       <h2>Resumo por Categoria</h2>
-      <div class="summary-grid">
+      <table class="summary-table">
         ${Object.entries(totals).map(([cat, data]) => `
-          <div class="summary-card">
-            <div class="summary-label">${catLabels[cat] || cat}</div>
-            <div class="summary-value">${fmtCurrency(data.value)}</div>
-            <div class="summary-count">${data.count} item(s)</div>
-          </div>
+          <tr>
+            <td>${catLabels[cat] || cat} (${data.count})</td>
+            <td>${fmtCurrency(data.value)}</td>
+          </tr>
         `).join('')}
-        <div class="summary-card total">
-          <div class="summary-label">Total Geral</div>
-          <div class="summary-value">${fmtCurrency(grandTotal)}</div>
-          <div class="summary-count">${r.expenses.length} documento(s)</div>
-        </div>
-      </div>
+        <tr>
+          <td>TOTAL (${sortedExpenses.length} documentos)</td>
+          <td>${fmtCurrency(grandTotal)}</td>
+        </tr>
+      </table>
     </div>
 
+    <!-- Tabela de Despesas -->
     <div class="expenses">
-      <h2>Lista de Despesas</h2>
-      <table>
+      <h2>Detalhamento das Despesas</h2>
+      <table class="expenses-table">
         <thead>
           <tr>
             <th>Arquivo</th>
-            <th>Categoria</th>
-            <th>Estabelecimento</th>
-            <th>Data</th>
+            <th>Classificação</th>
             <th>Valor</th>
+            <th>Data</th>
+            <th>Código</th>
           </tr>
         </thead>
         <tbody>
-          ${r.expenses.map(e => `
+          ${expensesWithImages.map(e => `
             <tr>
               <td>${e.filename}</td>
-              <td><span class="cat cat-${e.category}">${catLabels[e.category] || e.category}</span></td>
-              <td>${e.establishment}</td>
-              <td>${e.date}</td>
+              <td>${catLabels[e.category] || e.category}</td>
               <td class="value">${e.value != null ? fmtCurrency(e.value) : '—'}</td>
+              <td class="date">${e.date}</td>
+              <td class="code">${p!.code || '—'}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     </div>
 
+    <!-- Comprovantes -->
+    <div class="receipts">
+      <h2>Comprovantes</h2>
+      ${expensesWithImages.map((e, i) => `
+        <div class="receipt">
+          <div class="receipt-header">
+            <div class="receipt-filename">${i + 1}. ${e.filename}</div>
+            <div class="receipt-details">
+              ${catLabels[e.category] || e.category} | 
+              ${e.date} | 
+              ${e.value != null ? fmtCurrency(e.value) : '—'}
+            </div>
+          </div>
+          ${e.imageBase64 
+            ? `<img class="receipt-image" src="${e.imageBase64}" alt="${e.filename}" />`
+            : `<div class="no-image">Imagem não disponível</div>`
+          }
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- Rodapé -->
     <div class="footer">
-      Gerado em ${new Date().toLocaleString('pt-BR')} • Expense Manager
+      Documento gerado em ${new Date().toLocaleString('pt-BR')}
     </div>
   </div>
 </body>
@@ -395,10 +619,10 @@ export default function AppShell() {
         printWindow.document.write(html);
         printWindow.document.close();
         
-        // Aguardar e imprimir
+        // Aguardar imagens carregarem e imprimir
         setTimeout(() => {
           printWindow.print();
-        }, 300);
+        }, 500);
       } else {
         alert('Popup bloqueado. Permita popups para este site.');
       }
