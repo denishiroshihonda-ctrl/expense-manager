@@ -10,6 +10,7 @@ export interface Expense {
   description: string;
   confidence: number;
   thumbUrl?: string;
+  imageBase64?: string; // Imagem em alta qualidade para PDF
 }
 
 export interface Report {
