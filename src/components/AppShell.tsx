@@ -65,6 +65,7 @@ export default function AppShell() {
   const [editEid, setEditEid] = useState<string | null>(null);
 
   const [queueItems, setQueueItems] = useState<{ id: string; name: string; size: number; status: 'analyzing' | 'done' | 'error'; error?: string; warning?: string; thumbUrl?: string }[]>([]);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -245,6 +246,103 @@ export default function AppShell() {
     a.click();
   }
 
+  // Export PDF
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  
+  async function exportPDF() {
+    const p = ap(), r = ar();
+    if (!r || !r.expenses.length) { alert('Nenhum dado para exportar.'); return; }
+    
+    setIsExportingPDF(true);
+    
+    try {
+      // Preparar dados com imagens compactadas
+      const expensesWithImages = await Promise.all(
+        r.expenses.map(async (e) => {
+          let imageBase64 = e.thumbUrl;
+          
+          // Se temos thumbUrl (blob URL), converter para base64 compactado
+          if (e.thumbUrl && e.thumbUrl.startsWith('blob:')) {
+            try {
+              const response = await fetch(e.thumbUrl);
+              const blob = await response.blob();
+              
+              // Criar canvas para comprimir
+              const img = new Image();
+              const canvas = document.createElement('canvas');
+              
+              await new Promise<void>((resolve, reject) => {
+                img.onload = () => {
+                  // Redimensionar para miniatura (max 300px)
+                  const MAX = 300;
+                  let w = img.width, h = img.height;
+                  if (w > MAX || h > MAX) {
+                    if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                    else { w = Math.round(w * MAX / h); h = MAX; }
+                  }
+                  canvas.width = w;
+                  canvas.height = h;
+                  canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+                  resolve();
+                };
+                img.onerror = reject;
+                img.src = URL.createObjectURL(blob);
+              });
+              
+              imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+            } catch (err) {
+              console.error('Erro ao processar imagem:', err);
+              imageBase64 = undefined;
+            }
+          }
+          
+          return {
+            ...e,
+            imageBase64,
+          };
+        })
+      );
+
+      const reportData = {
+        projectName: p!.name,
+        projectCode: p!.code || '',
+        reportName: r.name,
+        expenses: expensesWithImages,
+        generatedAt: new Date().toLocaleString('pt-BR'),
+      };
+
+      // Chamar API para gerar HTML
+      const response = await fetch('/api/export-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reportData),
+      });
+
+      if (!response.ok) throw new Error('Erro ao gerar PDF');
+      
+      const { html } = await response.json();
+      
+      // Abrir nova janela com o HTML para impressão
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        
+        // Aguardar imagens carregarem e imprimir
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+          }, 500);
+        };
+      }
+    } catch (error) {
+      console.error('Erro ao exportar PDF:', error);
+      alert('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  }
+
   const activeProject = ap();
   const activeReport = ar();
   const grandTotal = projects.reduce((s, p) => s + p.reports.reduce((ss, r) => ss + r.expenses.reduce((sss, e) => sss + (e.value ?? 0), 0), 0), 0);
@@ -263,27 +361,45 @@ export default function AppShell() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
-      <Sidebar
-        projects={projects}
-        activePid={activePid}
-        activeRid={activeRid}
-        grandTotal={grandTotal}
-        onSelectReport={(pid, rid) => { setActivePid(pid); setActiveRid(rid); setFilter('all'); setQueueItems([]); }}
-        onToggleProject={(pid) => { setActivePid(prev => prev === pid ? null : pid); if (activePid !== pid) setActiveRid(null); }}
-        onNewProject={() => { setEditPid(null); setShowPM(true); }}
-        onEditProject={(pid) => { setEditPid(pid); setShowPM(true); }}
-        onDeleteProject={deleteProject}
-        onNewReport={(pid) => { setPendRpid(pid); setShowRM(true); }}
-        onDeleteReport={deleteReport}
-      />
+      {/* Overlay mobile */}
+      {showMobileMenu && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
+          onClick={() => setShowMobileMenu(false)} 
+        />
+      )}
 
-      <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Sidebar - escondida no mobile, visível no desktop */}
+      <div className={`
+        fixed lg:relative inset-y-0 left-0 z-50 
+        transform transition-transform duration-200 ease-in-out
+        ${showMobileMenu ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <Sidebar
+          projects={projects}
+          activePid={activePid}
+          activeRid={activeRid}
+          grandTotal={grandTotal}
+          onSelectReport={(pid, rid) => { setActivePid(pid); setActiveRid(rid); setFilter('all'); setQueueItems([]); setShowMobileMenu(false); }}
+          onToggleProject={(pid) => { setActivePid(prev => prev === pid ? null : pid); if (activePid !== pid) setActiveRid(null); }}
+          onNewProject={() => { setEditPid(null); setShowPM(true); setShowMobileMenu(false); }}
+          onEditProject={(pid) => { setEditPid(pid); setShowPM(true); }}
+          onDeleteProject={deleteProject}
+          onNewReport={(pid) => { setPendRpid(pid); setShowRM(true); setShowMobileMenu(false); }}
+          onDeleteReport={deleteReport}
+        />
+      </div>
+
+      <div className="flex flex-col flex-1 overflow-hidden w-full">
         <Topbar
           project={activeProject}
           report={activeReport}
-          onExport={exportCSV}
+          onExportCSV={exportCSV}
+          onExportPDF={exportPDF}
+          isExportingPDF={isExportingPDF}
+          onMenuClick={() => setShowMobileMenu(true)}
         />
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-3 lg:p-5">
           {!activeReport ? (
             <div className="flex flex-col items-center justify-center min-h-[340px] text-center">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-3" style={{ background: 'var(--surf)', border: '1px solid var(--brd)' }}>📋</div>
