@@ -1,11 +1,21 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
 export async function middleware(request: NextRequest) {
+  // Rotas públicas que não precisam de autenticação
+  const publicRoutes = ['/login', '/auth/callback'];
+  const isPublicRoute = publicRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
+  );
+
+  // Se é rota pública, deixa passar
+  if (isPublicRoute) {
+    return NextResponse.next();
+  }
+
+  // Criar cliente Supabase
   let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+    request: { headers: request.headers },
   });
 
   const supabase = createServerClient(
@@ -16,35 +26,23 @@ export async function middleware(request: NextRequest) {
         get(name: string) {
           return request.cookies.get(name)?.value;
         },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({ name, value, ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          });
+        set(name: string, value: string, options: any) {
           response.cookies.set({ name, value, ...options });
         },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: '', ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          });
+        remove(name: string, options: any) {
           response.cookies.set({ name, value: '', ...options });
         },
       },
     }
   );
 
+  // Verificar sessão
   const { data: { session } } = await supabase.auth.getSession();
 
-  const publicRoutes = ['/login', '/auth/callback'];
-  const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route));
-
-  if (!session && !isPublicRoute) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  if (session && request.nextUrl.pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url));
+  // Se não tem sessão, redireciona para login
+  if (!session) {
+    const loginUrl = new URL('/login', request.url);
+    return NextResponse.redirect(loginUrl);
   }
 
   return response;
@@ -52,6 +50,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/).*)',
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - api routes
+     */
+    '/((?!_next/static|_next/image|favicon.ico|api).*)',
   ],
 };
