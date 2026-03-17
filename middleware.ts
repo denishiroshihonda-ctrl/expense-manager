@@ -36,16 +36,13 @@ export async function middleware(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession();
 
-  // Rotas públicas
   const publicRoutes = ['/login', '/auth/callback'];
   const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route));
 
-  // Se não está logado e não é rota pública, redireciona para login
   if (!session && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Se está logado e tenta acessar login, redireciona para home
   if (session && request.nextUrl.pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url));
   }
