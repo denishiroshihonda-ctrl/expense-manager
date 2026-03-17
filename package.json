@@ -12,6 +12,8 @@
     "react": "^18",
     "react-dom": "^18",
     "@anthropic-ai/sdk": "^0.24.3",
+    "@supabase/supabase-js": "^2.39.0",
+    "@supabase/ssr": "^0.1.0",
     "pdfjs-dist": "^4.2.67"
   },
   "devDependencies": {
