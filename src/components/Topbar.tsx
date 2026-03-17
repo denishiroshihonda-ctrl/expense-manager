@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Project, Report } from '@/lib/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   project: Project | null;
@@ -12,7 +13,9 @@ interface Props {
 }
 
 export default function Topbar({ project, report, onExportCSV, onExportPDF, isExportingPDF, onMenuClick }: Props) {
+  const { user, signOut } = useAuth();
   const [isDark, setIsDark] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Carregar preferência salva
   useEffect(() => {
@@ -30,6 +33,15 @@ export default function Topbar({ project, report, onExportCSV, onExportPDF, isEx
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('expense-manager-theme', newTheme);
   }
+
+  const handleSignOut = async () => {
+    await signOut();
+    window.location.href = '/login';
+  };
+
+  // Pegar inicial do email/nome
+  const userInitial = user?.email?.[0]?.toUpperCase() || '?';
+  const userEmail = user?.email || '';
 
   return (
     <div className="flex items-center justify-between px-3 lg:px-5 py-3 flex-shrink-0" style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--brd)' }}>
@@ -86,9 +98,41 @@ export default function Topbar({ project, report, onExportCSV, onExportPDF, isEx
         >
           {isDark ? '☀️' : '🌙'}
         </button>
-        <div className="hidden sm:flex items-center gap-1.5 text-xs" style={{ color: 'var(--tx3)' }}>
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>
-          API
+        
+        {/* Menu do usuário */}
+        <div className="relative">
+          <button 
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-colors"
+            style={{ background: '#3b82f6', color: '#fff' }}
+            title={userEmail}
+          >
+            {userInitial}
+          </button>
+          
+          {showUserMenu && (
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setShowUserMenu(false)}
+              />
+              <div 
+                className="absolute right-0 top-10 z-50 min-w-[200px] rounded-lg shadow-lg py-2"
+                style={{ background: 'var(--surf)', border: '1px solid var(--brd)' }}
+              >
+                <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--brd)' }}>
+                  <div className="text-xs font-medium truncate" style={{ color: 'var(--tx)' }}>{userEmail}</div>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-red-500/10"
+                  style={{ color: '#ef4444' }}
+                >
+                  Sair
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
