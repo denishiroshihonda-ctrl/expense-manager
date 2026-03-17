@@ -2,6 +2,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Project, Report, Expense, Category, CAT, COLORS, fmt } from '@/lib/types';
 import { resizeImage, renderPdfPage, formatFileSize } from '@/lib/fileUtils';
+import { useSupabaseData } from '@/hooks/useSupabaseData';
+import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import ReportView from './ReportView';
@@ -9,53 +11,24 @@ import ProjectModal from './ProjectModal';
 import ReportModal from './ReportModal';
 import ExpenseModal from './ExpenseModal';
 
-const STORAGE_KEY = 'expense-manager-data';
-
-let _id = 1;
-const uid = () => String(_id++);
-
-// Carregar dados do localStorage
-function loadFromStorage(): { projects: Project[]; nextId: number } {
-  if (typeof window === 'undefined') return { projects: [], nextId: 1 };
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) {
-      const parsed = JSON.parse(data);
-      return { 
-        projects: parsed.projects ?? [], 
-        nextId: parsed.nextId ?? 1 
-      };
-    }
-  } catch (e) {
-    console.error('Erro ao carregar dados:', e);
-  }
-  return { projects: [], nextId: 1 };
-}
-
-// Salvar dados no localStorage
-function saveToStorage(projects: Project[], nextId: number) {
-  if (typeof window === 'undefined') return;
-  try {
-    // Remove thumbUrl antes de salvar (são URLs temporárias)
-    const cleanProjects = projects.map(p => ({
-      ...p,
-      reports: p.reports.map(r => ({
-        ...r,
-        expenses: r.expenses.map(e => ({ ...e, thumbUrl: undefined }))
-      }))
-    }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects: cleanProjects, nextId }));
-  } catch (e) {
-    console.error('Erro ao salvar dados:', e);
-  }
-}
-
 export default function AppShell() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  const {
+    projects,
+    loading: dataLoading,
+    createProject,
+    updateProject,
+    deleteProject: deleteProjectDb,
+    createReport,
+    deleteReport: deleteReportDb,
+    addExpense,
+    updateExpense: updateExpenseDb,
+    deleteExpense,
+  } = useSupabaseData();
+
   const [activePid, setActivePid] = useState<string | null>(null);
   const [activeRid, setActiveRid] = useState<string | null>(null);
   const [filter, setFilter] = useState<Category | 'all'>('all');
-  const [isLoaded, setIsLoaded] = useState(false);
 
   const [showPM, setShowPM] = useState(false);
   const [showRM, setShowRM] = useState(false);
@@ -68,16 +41,6 @@ export default function AppShell() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Carregar dados ao iniciar
-  useEffect(() => {
-    const { projects: savedProjects, nextId } = loadFromStorage();
-    if (savedProjects.length > 0) {
-      setProjects(savedProjects);
-      _id = nextId;
-    }
-    setIsLoaded(true);
-  }, []);
 
   // Carregar PDF.js
   useEffect(() => {
@@ -92,69 +55,52 @@ export default function AppShell() {
     }
   }, []);
 
-  // Salvar dados quando projects mudar
-  useEffect(() => {
-    if (isLoaded) {
-      saveToStorage(projects, _id);
-    }
-  }, [projects, isLoaded]);
-
   const ap = () => projects.find(p => p.id === activePid) ?? null;
   const ar = () => { const p = ap(); return p ? p.reports.find(r => r.id === activeRid) ?? null : null; };
 
-  const updateProjects = (fn: (prev: Project[]) => Project[]) => setProjects(fn);
-
-  // Project ops
-  function createProject(name: string, code: string, color: string) {
-    const p: Project = { id: uid(), name, code, color, reports: [] };
-    updateProjects(prev => [p, ...prev]);
-    setActivePid(p.id);
-    setActiveRid(null);
+  // Project ops - usando Supabase
+  async function handleCreateProject(name: string, code: string, color: string) {
+    const id = await createProject(name, code, color);
+    if (id) {
+      setActivePid(id);
+      setActiveRid(null);
+    }
   }
-  function updateProject(id: string, name: string, code: string, color: string) {
-    updateProjects(prev => prev.map(p => p.id === id ? { ...p, name, code, color } : p));
+  async function handleUpdateProject(id: string, name: string, code: string, color: string) {
+    await updateProject(id, name, code, color);
   }
-  function deleteProject(id: string) {
+  async function handleDeleteProject(id: string) {
     if (!confirm('Excluir este projeto?')) return;
-    updateProjects(prev => prev.filter(p => p.id !== id));
-    if (activePid === id) { setActivePid(null); setActiveRid(null); }
+    const success = await deleteProjectDb(id);
+    if (success && activePid === id) { 
+      setActivePid(null); 
+      setActiveRid(null); 
+    }
   }
 
-  // Report ops
-  function createReport(pid: string, name: string) {
-    const r: Report = { id: uid(), name, expenses: [] };
-    updateProjects(prev => prev.map(p => p.id === pid ? { ...p, reports: [...p.reports, r] } : p));
-    setActivePid(pid);
-    setActiveRid(r.id);
-    setFilter('all');
+  // Report ops - usando Supabase
+  async function handleCreateReport(pid: string, name: string) {
+    const id = await createReport(pid, name);
+    if (id) {
+      setActivePid(pid);
+      setActiveRid(id);
+      setFilter('all');
+    }
   }
-  function deleteReport(pid: string, rid: string) {
+  async function handleDeleteReport(pid: string, rid: string) {
     if (!confirm('Excluir este relatório?')) return;
-    updateProjects(prev => prev.map(p => p.id === pid ? { ...p, reports: p.reports.filter(r => r.id !== rid) } : p));
-    if (activeRid === rid) { setActiveRid(null); }
+    const success = await deleteReportDb(pid, rid);
+    if (success && activeRid === rid) { 
+      setActiveRid(null); 
+    }
   }
 
-  // Expense ops
-  function updateExpense(eid: string, data: Partial<Expense>) {
-    updateProjects(prev => prev.map(p => ({
-      ...p,
-      reports: p.reports.map(r => ({
-        ...r,
-        expenses: r.expenses.map(e => e.id === eid ? { ...e, ...data, confidence: 100 } : e),
-      })),
-    })));
+  // Expense ops - usando Supabase
+  async function handleUpdateExpense(eid: string, data: Partial<Expense>) {
+    await updateExpenseDb(eid, { ...data, confidence: 100 });
   }
-  function removeExpense(eid: string) {
-    updateProjects(prev => prev.map(p => ({
-      ...p,
-      reports: p.reports.map(r => ({ ...r, expenses: r.expenses.filter(e => e.id !== eid) })),
-    })));
-  }
-  function addExpenseToReport(rid: string, expense: Expense) {
-    updateProjects(prev => prev.map(p => ({
-      ...p,
-      reports: p.reports.map(r => r.id === rid ? { ...r, expenses: [...r.expenses, expense] } : r),
-    })));
+  async function handleRemoveExpense(eid: string) {
+    await deleteExpense(eid);
   }
 
   // File handling
@@ -166,9 +112,9 @@ export default function AppShell() {
 
     const rid = r.id;
     for (const file of valid) {
-      const id = uid();
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const thumbUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-      setQueueItems(prev => [...prev, { id, name: file.name, size: file.size, status: 'analyzing', thumbUrl }]);
+      setQueueItems(prev => [...prev, { id: tempId, name: file.name, size: file.size, status: 'analyzing', thumbUrl }]);
 
       try {
         let base64: string;
@@ -184,7 +130,7 @@ export default function AppShell() {
           wasCompressed = result.wasCompressed;
           originalSize = result.originalSize;
           finalSize = result.finalSize;
-          setQueueItems(prev => prev.map(q => q.id === id ? { ...q, thumbUrl: pdfThumb } : q));
+          setQueueItems(prev => prev.map(q => q.id === tempId ? { ...q, thumbUrl: pdfThumb } : q));
         } else {
           const result = await resizeImage(file);
           base64 = result.base64;
@@ -210,8 +156,8 @@ export default function AppShell() {
           throw new Error(data.error || `Erro HTTP ${res.status}`);
         }
 
-        const expense: Expense = {
-          id,
+        // Adicionar despesa ao banco via Supabase
+        await addExpense(rid, {
           filename: file.name,
           category: data.category ?? 'other',
           establishment: data.establishment ?? 'Não identificado',
@@ -220,16 +166,16 @@ export default function AppShell() {
           description: data.description ?? file.name,
           confidence: data.confidence ?? 50,
           thumbUrl: pdfThumb ?? thumbUrl,
-          imageBase64: base64, // Salvar imagem em alta qualidade para PDF
-        };
-        addExpenseToReport(rid, expense);
-        setQueueItems(prev => prev.map(q => q.id === id ? { ...q, status: 'done', warning } : q));
+          imageBase64: base64,
+        });
+        
+        setQueueItems(prev => prev.map(q => q.id === tempId ? { ...q, status: 'done', warning } : q));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        setQueueItems(prev => prev.map(q => q.id === id ? { ...q, status: 'error', error: msg } : q));
+        setQueueItems(prev => prev.map(q => q.id === tempId ? { ...q, status: 'error', error: msg } : q));
       }
     }
-  }, [activePid, activeRid, projects]);
+  }, [activePid, activeRid, projects, addExpense]);
 
   // Export CSV
   function exportCSV() {
@@ -612,8 +558,8 @@ export default function AppShell() {
   const activeReport = ar();
   const grandTotal = projects.reduce((s, p) => s + p.reports.reduce((ss, r) => ss + r.expenses.reduce((sss, e) => sss + (e.value ?? 0), 0), 0), 0);
 
-  // Mostrar loading enquanto carrega dados do localStorage
-  if (!isLoaded) {
+  // Mostrar loading enquanto carrega auth ou dados
+  if (authLoading || dataLoading) {
     return (
       <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg)' }}>
         <div className="text-center">
@@ -649,9 +595,9 @@ export default function AppShell() {
           onToggleProject={(pid) => { setActivePid(prev => prev === pid ? null : pid); if (activePid !== pid) setActiveRid(null); }}
           onNewProject={() => { setEditPid(null); setShowPM(true); setShowMobileMenu(false); }}
           onEditProject={(pid) => { setEditPid(pid); setShowPM(true); }}
-          onDeleteProject={deleteProject}
+          onDeleteProject={handleDeleteProject}
           onNewReport={(pid) => { setPendRpid(pid); setShowRM(true); setShowMobileMenu(false); }}
-          onDeleteReport={deleteReport}
+          onDeleteReport={handleDeleteReport}
         />
       </div>
 
@@ -681,7 +627,7 @@ export default function AppShell() {
               onFilterChange={setFilter}
               onFilesSelected={handleFiles}
               onEditExpense={(eid) => { setEditEid(eid); setShowEM(true); }}
-              onRemoveExpense={removeExpense}
+              onRemoveExpense={handleRemoveExpense}
             />
           )}
         </div>
@@ -700,8 +646,8 @@ export default function AppShell() {
         <ProjectModal
           project={editPid ? projects.find(p => p.id === editPid) : undefined}
           onSave={(name, code, color) => {
-            if (editPid) updateProject(editPid, name, code, color);
-            else createProject(name, code, color);
+            if (editPid) handleUpdateProject(editPid, name, code, color);
+            else handleCreateProject(name, code, color);
             setShowPM(false);
           }}
           onClose={() => setShowPM(false)}
@@ -709,14 +655,14 @@ export default function AppShell() {
       )}
       {showRM && pendRpid && (
         <ReportModal
-          onSave={(name) => { createReport(pendRpid, name); setShowRM(false); }}
+          onSave={(name) => { handleCreateReport(pendRpid, name); setShowRM(false); }}
           onClose={() => setShowRM(false)}
         />
       )}
       {showEM && editEid && (
         <ExpenseModal
           expense={(() => { for (const p of projects) for (const r of p.reports) { const e = r.expenses.find(x => x.id === editEid); if (e) return e; } return null; })()!}
-          onSave={(data) => { updateExpense(editEid, data); setShowEM(false); }}
+          onSave={(data) => { handleUpdateExpense(editEid, data); setShowEM(false); }}
           onClose={() => setShowEM(false)}
         />
       )}
